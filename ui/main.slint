@@ -1,0 +1,30 @@
+import { Button } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    title: "T4V BIN-Alken convertor";
+    width: 480px;
+    height: 250px;
+    in-out property<string> input_file: "";
+    in-out property<string> output_file: "";
+    in-out property<string> status: "Ready.";
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 10px;
+
+        Text { text: "XLSX → ; CSV converter"; }
+
+        HorizontalLayout {
+            spacing: 8px;
+            Button { text: "Import XLSX"; clicked => { root.import_clicked(); } }
+            Button { text: "Save CSV"; enabled: input_file != ""; clicked => { root.export_clicked(); } }
+        }
+
+        Text { text: "Input: " + input_file; wrap: word-wrap; }
+        Text { text: "Output: " + output_file; wrap: word-wrap; }
+        Text { text: "Status: " + status; wrap: word-wrap; }
+    }
+
+    callback import_clicked();
+    callback export_clicked();
+}
