@@ -5,5 +5,7 @@ BE-Alert xlsx to cvs convertor
 File format tested with alken.be xlsx files
 
 Tools4Video BV All Rights reserved
+
 Copyright (c) 2025 Tools4Video 
+
 Developer Marc Colemont
