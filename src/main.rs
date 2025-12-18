@@ -39,7 +39,16 @@ use csv::WriterBuilder;
 use rfd::FileDialog;
 use std::collections::HashMap;
 use std::path::Path;
+use slint::CloseRequestResponse;
 
+const REQUIRED_COLUMNS: [&str; 6] = [
+    "Voornaam",
+    "Naam",
+    "Straat",
+    "Huisnummer",
+    "Mobiel nummer",
+    "E-mailadres",
+];
 
 slint::include_modules!();
 
@@ -116,6 +125,34 @@ fn normalize_be_phone(input: &str) -> String {
     s
 }
 
+fn validate_xlsx_columns(input_xlsx: &str) -> Result<()> {
+    let mut workbook: Xlsx<_> = open_workbook(input_xlsx)?;
+    let range = workbook
+        .worksheet_range_at(0)
+        .ok_or_else(|| anyhow!("No sheet found in XLSX"))??;
+
+    let mut rows = range.rows();
+    let header = rows
+        .next()
+        .ok_or_else(|| anyhow!("Empty sheet (no header row)"))?;
+
+    let mut cols: HashMap<String, usize> = HashMap::new();
+    for (i, cell) in header.iter().enumerate() {
+        let name = cell_to_string(cell).trim().to_string();
+        if !name.is_empty() {
+            cols.insert(name, i);
+        }
+    }
+
+    for required in REQUIRED_COLUMNS {
+        if !cols.contains_key(required) {
+            return Err(anyhow!("Missing required XLSX column: {}", required));
+        }
+    }
+
+    Ok(())
+}
+
 fn convert_xlsx_to_csv(input_xlsx: &str, output_csv: &str) -> Result<()> {
     let mut workbook: Xlsx<_> = open_workbook(input_xlsx)?;
     let range = workbook
@@ -135,7 +172,7 @@ fn convert_xlsx_to_csv(input_xlsx: &str, output_csv: &str) -> Result<()> {
     }
 
     // Required input columns
-    for required in ["Voornaam", "Naam", "Straat", "Huisnummer", "Mobiel nummer", "E-mailadres"] {
+    for required in REQUIRED_COLUMNS {
         if !cols.contains_key(required) {
             return Err(anyhow!("Missing required XLSX column: {}", required));
         }
@@ -256,6 +293,14 @@ fn convert_xlsx_to_csv(input_xlsx: &str, output_csv: &str) -> Result<()> {
 fn main() -> Result<()> {
     let ui = MainWindow::new()?;
 
+    {
+        let window = ui.window();
+        window.on_close_requested(|| {
+            let _ = slint::quit_event_loop();
+            CloseRequestResponse::HideWindow
+        });
+    }
+
     ui.on_import_clicked({
         let ui_handle = ui.as_weak();
         move || {
@@ -264,9 +309,23 @@ fn main() -> Result<()> {
                     .add_filter("Excel", &["xlsx"])
                     .pick_file()
                 {
-                    ui.set_input_file(file.display().to_string().into());
+                    let path_str = file.display().to_string();
+                    ui.set_input_file(path_str.clone().into());
                     ui.set_output_file("".into());
-                    ui.set_status("XLSX selected.".into());
+                    ui.set_export_checked(false);
+                    ui.set_export_ok(false);
+
+                    ui.set_import_checked(true);
+                    match validate_xlsx_columns(&path_str) {
+                        Ok(_) => {
+                            ui.set_import_ok(true);
+                            ui.set_status("XLSX selected and columns OK.".into());
+                        }
+                        Err(e) => {
+                            ui.set_import_ok(false);
+                            ui.set_status(format!("XLSX error: {}", e).into());
+                        }
+                    }
                 }
             }
         }
@@ -278,31 +337,50 @@ fn main() -> Result<()> {
             if let Some(ui) = ui_handle.upgrade() {
                 let input = ui.get_input_file().to_string();
                 if input.trim().is_empty() {
-                ui.set_status("No XLSX selected.".into());
-                return;
-            }
+                    ui.set_status("No XLSX selected.".into());
+                    return;
+                }
 
-            let suggested_name = Path::new(&input)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .map(|stem| format!("{}.csv", stem))
-                .unwrap_or_else(|| "output.csv".to_string());
+                let suggested_name = Path::new(&input)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|stem| format!("{}.csv", stem))
+                    .unwrap_or_else(|| "output.csv".to_string());
 
-            if let Some(out) = FileDialog::new()
-                .add_filter("CSV", &["csv"])
-                .set_file_name(suggested_name)
-                .save_file()
-            {
+                if let Some(out) = FileDialog::new()
+                    .add_filter("CSV", &["csv"])
+                    .set_file_name(suggested_name)
+                    .save_file()
+                {
                     match convert_xlsx_to_csv(&input, out.to_str().unwrap()) {
                         Ok(_) => {
                             ui.set_output_file(out.display().to_string().into());
                             ui.set_status("CSV saved.".into());
+                            ui.set_export_checked(true);
+                            ui.set_export_ok(true);
                         }
                         Err(e) => {
                             ui.set_status(format!("Error: {}", e).into());
+                            ui.set_export_checked(true);
+                            ui.set_export_ok(false);
                         }
                     }
                 }
+            }
+        }
+    });
+
+    ui.on_reset_clicked({
+        let ui_handle = ui.as_weak();
+        move || {
+            if let Some(ui) = ui_handle.upgrade() {
+                ui.set_input_file("".into());
+                ui.set_output_file("".into());
+                ui.set_status("Ready.".into());
+                ui.set_import_checked(false);
+                ui.set_import_ok(false);
+                ui.set_export_checked(false);
+                ui.set_export_ok(false);
             }
         }
     });

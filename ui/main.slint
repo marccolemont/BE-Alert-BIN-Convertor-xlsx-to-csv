@@ -3,10 +3,14 @@ import { Button } from "std-widgets.slint";
 export component MainWindow inherits Window {
     title: "T4V BIN-Alken convertor";
     width: 480px;
-    height: 250px;
+    height: 320px;
     in-out property<string> input_file: "";
     in-out property<string> output_file: "";
     in-out property<string> status: "Ready.";
+    in-out property<bool> import_checked: false;
+    in-out property<bool> import_ok: false;
+    in-out property<bool> export_checked: false;
+    in-out property<bool> export_ok: false;
 
     VerticalLayout {
         padding: 12px;
@@ -20,11 +24,28 @@ export component MainWindow inherits Window {
             Button { text: "Save CSV"; enabled: input_file != ""; clicked => { root.export_clicked(); } }
         }
 
+        Text {
+            text: import_checked ? (import_ok ? "✔ Import OK" : "✖ Import failed (columns)") : "";
+            color: import_ok ? #0a8a0a : #c00000;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: export_checked ? (export_ok ? "✔ CSV saved" : "✖ Export failed") : "";
+            color: export_ok ? #0a8a0a : #c00000;
+            horizontal-alignment: center;
+        }
+
         Text { text: "Input: " + input_file; wrap: word-wrap; }
         Text { text: "Output: " + output_file; wrap: word-wrap; }
         Text { text: "Status: " + status; wrap: word-wrap; }
+
+        HorizontalLayout {
+            alignment: center;
+            Button { text: "Restart / Refresh"; clicked => { root.reset_clicked(); } }
+        }
     }
 
     callback import_clicked();
     callback export_clicked();
+    callback reset_clicked();
 }
