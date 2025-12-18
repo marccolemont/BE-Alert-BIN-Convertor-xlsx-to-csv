@@ -1,6 +1,14 @@
 // src/main.rs
+// BE-Alert xlsx to cvs convertor 
+// -------------------------------
 //
-// Slint GUI: pick XLSX, save CSV (; separated)
+// File format tested with alken.be xlsx files
+//
+// Tools4Video BV All Rights reserved
+// Copyright (c) 2025 Tools4Video 
+// Developer Marc Colemont
+//
+//  XLSX, save CSV (; separated)
 //
 // Reads XLSX columns (required):
 // - Voornaam
@@ -10,7 +18,7 @@
 // - Mobiel nummer
 // - E-mailadres
 //
-// Outputs NEW CSV format (33 columns):
+// Outputs BE-Alert BIN NEW CSV format (33 columns):
 // - 1st column "Tel/Ref." = formatted phone from "Mobiel nummer"
 // - 2nd column "Civilité"
 // - "Adres incl huisnummer" uses ONLY numeric part of Huisnummer (e.g. 11A -> 11, "12 Bus 3" -> 12)
