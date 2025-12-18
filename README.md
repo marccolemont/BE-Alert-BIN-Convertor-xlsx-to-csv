@@ -2,6 +2,8 @@
 Convertor to convert a BIN-Alken members xlsx file to a BE-Alert compatible BIN - CSV file to be imported
 BE-Alert xlsx to cvs convertor 
 
+![logo](assets/BE-AlertConvertotLogo.png)
+
 File format tested with alken.be xlsx files
 
 Tools4Video BV All Rights reserved
