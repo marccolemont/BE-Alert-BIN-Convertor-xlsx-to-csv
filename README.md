@@ -16,6 +16,7 @@ Outputs BE-Alert BIN NEW CSV format (33 columns):
 - Load the XLSX file
 - Convert and save the exported BE-ALert compatible CSV file
 - Import CSV file to import new members
+  
 ![Convertor](assets/Convertor.png)
   
 
