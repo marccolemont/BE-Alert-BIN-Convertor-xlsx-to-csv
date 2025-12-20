@@ -1,0 +1,84 @@
+name: Build BIN-Convertor (Win + macOS + Pi64)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            runner: windows-latest
+            kind: windows
+            target: x86_64-pc-windows-msvc
+
+          - name: macos-app
+            runner: macos-latest
+            kind: macos
+
+          - name: raspberrypi-64
+            runner: ubuntu-latest
+            kind: pi
+            target: aarch64-unknown-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # ----- Windows x64 -----
+      - name: Build (Windows x64)
+        if: matrix.kind == 'windows'
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload (Windows exe)
+        if: matrix.kind == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BIN-Convertor-windows-x64
+          path: target/${{ matrix.target }}/release/*.exe
+
+      # ----- macOS .app -----
+      - name: Install cargo-bundle
+        if: matrix.kind == 'macos'
+        run: cargo install cargo-bundle
+
+      - name: Bundle (macOS)
+        if: matrix.kind == 'macos'
+        run: cargo bundle --release
+
+      - name: Upload (macOS app)
+        if: matrix.kind == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BIN-Convertor-macos-app
+          path: target/release/bundle/osx/*.app
+
+      # ----- Raspberry Pi 64-bit -----
+      - name: Setup QEMU (for cross)
+        if: matrix.kind == 'pi'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Install cross
+        if: matrix.kind == 'pi'
+        run: cargo install cross --locked
+
+      - name: Build (Raspberry Pi 64-bit)
+        if: matrix.kind == 'pi'
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Upload (Pi 64 binary)
+        if: matrix.kind == 'pi'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BIN-Convertor-raspberrypi-64
+          path: target/${{ matrix.target }}/release/*
