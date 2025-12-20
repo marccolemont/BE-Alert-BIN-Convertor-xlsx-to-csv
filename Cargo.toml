@@ -14,3 +14,9 @@ anyhow = "1.0"
 [build-dependencies]
 slint-build = "1.6"
 winres = "0.1"
+
+[package.metadata.bundle]
+name = "BIN-ALKEN-Convertor"
+identifier = "be.tools4video.binconvertor"
+icon = ["assets/AppIcon.icns"]
+category = "public.app-category.utilities"
