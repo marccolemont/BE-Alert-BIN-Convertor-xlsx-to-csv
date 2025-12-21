@@ -63,21 +63,16 @@ jobs:
           CERT_PASSWORD: ${{ secrets.MACOS_CERT_P12_PASSWORD }}
         run: |
           python3 - <<'PY'
-          import os, base64, re, hashlib
+          import os, base64, re
           b64 = os.environ.get('CERT_B64','')
           b64 = re.sub(r"\s+", "", b64)
-          print(f"CERT_B64 length (chars): {len(b64)}")
           data = base64.b64decode(b64)
           with open('developerid.p12','wb') as f:
               f.write(data)
           print(f"Wrote developerid.p12 ({len(data)} bytes)")
-          print(f"developerid.p12 sha256: {hashlib.sha256(data).hexdigest()}")
           PY
 
-          # Show what kind of file this is (helps detect if it's actually a .cer/.der)
-          file developerid.p12 || true
-
-          # Quick sanity check to fail fast with a helpful error if the secret isn't a real .p12
+          # Validate the p12 (fails fast if password is wrong or file is corrupted)
           openssl pkcs12 -in developerid.p12 -passin pass:"$CERT_PASSWORD" -noout
 
           # Create and configure a temporary keychain for codesign
@@ -115,7 +110,20 @@ jobs:
           ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
           KEY_P8_B64: ${{ secrets.APPLE_API_KEY_P8_B64 }}
         run: |
-          echo "$KEY_P8_B64" | base64 --decode > AuthKey.p8
+          # Write the API private key. Supports either base64-encoded content OR raw PEM stored in the secret.
+          python3 - <<'PY'
+          import os, base64, re
+          s = os.environ.get('KEY_P8_B64','')
+          if 'BEGIN PRIVATE KEY' in s:
+              data = (s.strip() + '\n').encode('utf-8')
+          else:
+              b64 = re.sub(r"\s+", "", s)
+              data = base64.b64decode(b64)
+          with open('AuthKey.p8','wb') as f:
+              f.write(data)
+          print(f"Wrote AuthKey.p8 ({len(data)} bytes)")
+          PY
+
           mkdir -p "$HOME/private_keys"
           cp AuthKey.p8 "$HOME/private_keys/AuthKey_${KEY_ID}.p8"
 
