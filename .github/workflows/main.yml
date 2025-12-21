@@ -1,4 +1,4 @@
-name: Build BIN-Convertor (Win + macOS + Pi64)
+name: Build BIN-Convertor (Win + macOS + Pi64) – Signed Version
 
 on:
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # ---- Windows x64 (.exe) ----
+      # ================= WINDOWS =================
       - name: Build (Windows x64)
         if: matrix.kind == 'windows'
         run: cargo build --release --target ${{ matrix.target }}
@@ -47,7 +47,7 @@ jobs:
           name: BIN-Convertor-windows-x64
           path: target/${{ matrix.target }}/release/*.exe
 
-      # ---- macOS (.app) ----
+      # ================= macOS =================
       - name: Install cargo-bundle
         if: matrix.kind == 'macos'
         run: cargo install cargo-bundle
@@ -56,14 +56,61 @@ jobs:
         if: matrix.kind == 'macos'
         run: cargo bundle --release
 
-      - name: Upload (macOS app)
+      - name: Import Developer ID certificate
+        if: matrix.kind == 'macos'
+        env:
+          CERT_B64: ${{ secrets.MACOS_CERT_P12_B64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_P12_PASSWORD }}
+        run: |
+          echo "$CERT_B64" | base64 --decode > developerid.p12
+
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+
+          security import developerid.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+
+      - name: Codesign macOS app (Developer ID)
+        if: matrix.kind == 'macos'
+        env:
+          SIGN_ID: ${{ secrets.DEVELOPERID_APPLE }}
+        run: |
+          APP=$(ls -d target/release/bundle/osx/*.app)
+          codesign --force --deep --options runtime --timestamp --sign "$SIGN_ID" "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Notarize and staple macOS app
+        if: matrix.kind == 'macos'
+        env:
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          KEY_P8_B64: ${{ secrets.APPLE_API_KEY_P8_B64 }}
+        run: |
+          echo "$KEY_P8_B64" | base64 --decode > AuthKey.p8
+          mkdir -p "$HOME/private_keys"
+          cp AuthKey.p8 "$HOME/private_keys/AuthKey_${KEY_ID}.p8"
+
+          APP=$(ls -d target/release/bundle/osx/*.app)
+          ditto -c -k --sequesterRsrc --keepParent "$APP" app.zip
+
+          xcrun notarytool submit app.zip \
+            --key "$HOME/private_keys/AuthKey_${KEY_ID}.p8" \
+            --key-id "$KEY_ID" \
+            --issuer "$ISSUER_ID" \
+            --wait
+
+          xcrun stapler staple "$APP"
+
+      - name: Upload (macOS app – signed)
         if: matrix.kind == 'macos'
         uses: actions/upload-artifact@v4
         with:
           name: BIN-Convertor-macos-app
           path: target/release/bundle/osx/*.app
 
-      # ---- Raspberry Pi 64-bit ----
+      # ================= PI =================
       - name: Setup QEMU (for cross)
         if: matrix.kind == 'pi'
         uses: docker/setup-qemu-action@v3
