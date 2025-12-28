@@ -73,8 +73,6 @@ jobs:
           exclude-shared-token-cache-credential: true
           exclude-visual-studio-credential: true
           exclude-visual-studio-code-credential: true
-          exclude-azure-cli-credential: true
-          exclude-azure-powershell-credential: true
           exclude-azure-developer-cli-credential: true
           exclude-interactive-browser-credential: true
 
