@@ -117,11 +117,17 @@ jobs:
             exit 1
           fi
 
-          # Expect exactly one executable inside Contents/MacOS
-          mapfile -t MACOS_BINS < <(find "$APP/Contents/MacOS" -maxdepth 1 -type f ! -name ".*" -print)
+          # Expect exactly one executable inside Contents/MacOS (bash 3.2 compatible)
+          MACOS_BINS=()
+          while IFS= read -r f; do
+            MACOS_BINS+=("$f")
+          done < <(find "$APP/Contents/MacOS" -maxdepth 1 -type f ! -name ".*" -print)
+
           if [ "${#MACOS_BINS[@]}" -ne 1 ]; then
             echo "ERROR: Expected exactly 1 binary in $APP/Contents/MacOS, found ${#MACOS_BINS[@]}" >&2
-            printf '%s\n' "${MACOS_BINS[@]}" >&2
+            for f in "${MACOS_BINS[@]}"; do
+              echo "$f" >&2
+            done
             exit 1
           fi
 
