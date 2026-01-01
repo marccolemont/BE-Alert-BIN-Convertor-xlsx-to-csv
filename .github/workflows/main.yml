@@ -36,8 +36,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+        if: matrix.kind != 'macos'
         with:
           targets: ${{ matrix.target }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: matrix.kind == 'macos'
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       # ================= WINDOWS =================
       - name: Build (Windows x64)
@@ -88,9 +94,72 @@ jobs:
         if: matrix.kind == 'macos'
         run: cargo install cargo-bundle
 
-      - name: Bundle (macOS)
+      - name: Build (macOS arm64 + x86_64)
         if: matrix.kind == 'macos'
-        run: cargo bundle --release
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "12.0"
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+
+      - name: Bundle (macOS) + make universal binary
+        if: matrix.kind == 'macos'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "12.0"
+        run: |
+          set -euo pipefail
+          # Create the .app bundle (cargo-bundle uses the host arch; we'll replace the binary with a universal one)
+          cargo bundle --release
+
+          APP=$(ls -d target/release/bundle/osx/*.app | head -n 1)
+          if [ -z "${APP:-}" ] || [ ! -d "$APP" ]; then
+            echo "ERROR: No .app bundle found at target/release/bundle/osx/*.app" >&2
+            exit 1
+          fi
+
+          # Expect exactly one executable inside Contents/MacOS
+          mapfile -t MACOS_BINS < <(find "$APP/Contents/MacOS" -maxdepth 1 -type f ! -name ".*" -print)
+          if [ "${#MACOS_BINS[@]}" -ne 1 ]; then
+            echo "ERROR: Expected exactly 1 binary in $APP/Contents/MacOS, found ${#MACOS_BINS[@]}" >&2
+            printf '%s\n' "${MACOS_BINS[@]}" >&2
+            exit 1
+          fi
+
+          BIN_PATH="${MACOS_BINS[0]}"
+          BIN_NAME=$(basename "$BIN_PATH")
+
+          ARM_BIN="target/aarch64-apple-darwin/release/$BIN_NAME"
+          X64_BIN="target/x86_64-apple-darwin/release/$BIN_NAME"
+
+          if [ ! -f "$ARM_BIN" ]; then
+            echo "ERROR: arm64 build not found: $ARM_BIN" >&2
+            exit 1
+          fi
+          if [ ! -f "$X64_BIN" ]; then
+            echo "ERROR: x86_64 build not found: $X64_BIN" >&2
+            exit 1
+          fi
+
+          echo "Bundled app: $APP"
+          echo "Binary name: $BIN_NAME"
+
+          # Replace the app binary with a universal (fat) binary
+          lipo -create "$ARM_BIN" "$X64_BIN" -output "$BIN_PATH"
+          chmod +x "$BIN_PATH"
+
+          # Fail fast if the output is not universal
+          LIPO_INFO=$(lipo -info "$BIN_PATH" || true)
+          echo "$LIPO_INFO"
+          echo "$LIPO_INFO" | grep -q "x86_64" || { echo "ERROR: universal binary missing x86_64" >&2; exit 1; }
+          echo "$LIPO_INFO" | grep -q "arm64"  || { echo "ERROR: universal binary missing arm64" >&2; exit 1; }
+
+          # Ensure the bundle declares macOS 12.0 minimum
+          /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion 12.0" "$APP/Contents/Info.plist" || \
+          /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 12.0" "$APP/Contents/Info.plist"
+
+          # Show the architectures to confirm universal and codesign details
+          file "$BIN_PATH"
+          codesign -dv --verbose=4 "$APP" 2>&1 | sed -n '1,40p'
 
       - name: Import Developer ID certificate
         if: matrix.kind == 'macos'
